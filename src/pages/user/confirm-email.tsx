@@ -1,0 +1,64 @@
+import { gql, useApolloClient, useMutation } from '@apollo/client';
+import React, { useEffect } from 'react';
+import { Helmet } from 'react-helmet';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { VerifyEmailMutation, VerifyEmailMutationVariables, VerifyEmailOutput } from '../../graphql/generated';
+import { useMe } from '../../hooks/useMe';
+
+const VERIFY_EMAIL = gql`
+  mutation verifyEmail($input: VerifyEmailInput!) {
+    verifyEmail(input: $input) {
+      ok
+      error
+    }
+  }
+`;
+
+export const ConfirmEmail = () => {
+  const navigate = useNavigate();
+  const { data: userData, refetch } = useMe();
+  const client = useApolloClient();
+  const onCompleted = async (data: VerifyEmailMutation) => {
+    const { verifyEmail: { ok } } = data;
+    if (ok && userData?.me) {
+      // await refetch();
+      client.writeFragment({
+        id: `User:${userData.me.id}`,
+        fragment: gql`
+          fragment VerifiedUser on User {
+            verified
+          }
+        `,
+        data: {
+          verified: true
+        }
+      })
+      navigate('/')
+    }
+  }
+  const [verifyEmail] = useMutation<
+    VerifyEmailMutation,
+    VerifyEmailMutationVariables
+  >(VERIFY_EMAIL, {
+    onCompleted
+  });
+  useEffect(() => {
+    const [_, code] = window.location.href.split("code=");
+    verifyEmail({
+      variables: {
+        input: {
+          code,
+        }
+      }
+    })
+  }, [verifyEmail])
+  return (
+    <div className='mt-52 flex flex-col items-center justify-center'>
+      <Helmet>
+        <title>Verify Email | Nuber Eats</title>
+      </Helmet>
+      <h2 className='text-lg mb-1 font-medium'>Confirming email...</h2>
+      <h4 className='text-gray-700 text-sm'>Please wait, don't close this pages....</h4>
+    </div>
+  )
+}
